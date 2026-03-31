@@ -1,5 +1,4 @@
 import React, { useState, useMemo, useRef, useEffect } from "react";
-import { motion, AnimatePresence } from "motion/react";
 import { toPng } from "html-to-image";
 import {
   TrendingDown,
@@ -118,6 +117,7 @@ interface DealData {
   softwareMrr: number | "";
   payMrr: number | "";
   justification: string;
+  salesforceLink: string;
 }
 
 // --- Components ---
@@ -171,14 +171,9 @@ const RepSelector = ({ selected, onSelect }: { selected: Representative | null, 
         <ChevronDown className={cn("w-4 h-4 text-zinc-400 transition-transform", isOpen && "rotate-180")} />
       </button>
 
-      <AnimatePresence>
+      <div className={cn("absolute z-50 w-full mt-2 bg-white border border-zinc-200 rounded-xl shadow-2xl overflow-hidden transition-all duration-200", isOpen ? "opacity-100 translate-y-0" : "opacity-0 translate-y-1 pointer-events-none")}>
         {isOpen && (
-          <motion.div
-            initial={{ opacity: 0, y: 4 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: 4 }}
-            className="absolute z-50 w-full mt-2 bg-white border border-zinc-200 rounded-xl shadow-2xl overflow-hidden"
-          >
+          <div className="w-full">
             <div className="p-3 border-b border-zinc-100 bg-zinc-50/50">
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400" />
@@ -215,9 +210,9 @@ const RepSelector = ({ selected, onSelect }: { selected: Representative | null, 
                 <div className="p-6 text-center text-xs text-zinc-400">No representatives found</div>
               )}
             </div>
-          </motion.div>
+          </div>
         )}
-      </AnimatePresence>
+      </div>
     </div>
   );
 };
@@ -230,7 +225,8 @@ export default function App() {
     salesPrice: "",
     softwareMrr: "",
     payMrr: 120,
-    justification: ""
+    justification: "",
+    salesforceLink: ""
   });
 
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -247,31 +243,33 @@ export default function App() {
       salesPrice: "",
       softwareMrr: "",
       payMrr: 120,
-      justification: ""
+      justification: "",
+      salesforceLink: ""
     });
   };
 
   const takeScreenshot = async () => {
     if (!appRef.current) return;
     setIsScreenshotting(true);
-    setTimeout(async () => {
-      try {
-        const dataUrl = await toPng(appRef.current!, {
-          backgroundColor: "#FFFFFF",
-          quality: 1,
-          pixelRatio: 2,
-          width: 1200,
-        });
-        const link = document.createElement("a");
-        link.href = dataUrl;
-        link.download = `deal-approval-${deal.accountName || "unnamed"}.png`;
-        link.click();
-      } catch (error) {
-        console.error("Screenshot failed:", error);
-      } finally {
-        setIsScreenshotting(false);
-      }
-    }, 150);
+    // Give UI time to update
+    await new Promise(resolve => setTimeout(resolve, 300));
+    try {
+      const dataUrl = await toPng(appRef.current!, {
+        backgroundColor: "#FFFFFF",
+        quality: 1,
+        pixelRatio: 2,
+        width: 1200,
+        // Remove height constraint to capture full content
+      });
+      const link = document.createElement("a");
+      link.href = dataUrl;
+      link.download = `deal-approval-${deal.accountName || "unnamed"}.png`;
+      link.click();
+    } catch (error) {
+      console.error("Screenshot failed:", error);
+    } finally {
+      setIsScreenshotting(false);
+    }
   };
 
   const metrics = useMemo(() => {
@@ -329,6 +327,7 @@ export default function App() {
         payback: metrics.paybackMonths + " months",
         hwLoss: "€" + metrics.hwLoss.toLocaleString(),
         justification: deal.justification,
+        salesforceLink: deal.salesforceLink,
         requiredApprover: metrics.requiredApprover,
         timestamp: new Date().toISOString()
       };
@@ -352,10 +351,16 @@ export default function App() {
   };
 
   const isPayMrrInvalid = deal.payMrr !== "" && Number(deal.payMrr) < 120;
-  const canSubmit = deal.representative && deal.accountName && deal.listPrice !== "" && deal.salesPrice !== "" && !isPayMrrInvalid && (metrics.needsApproval ? deal.justification : true);
+  const isSfLinkInvalid = deal.salesforceLink !== "" && !deal.salesforceLink.startsWith("https://");
+  const canSubmit = deal.representative && 
+                   deal.accountName && 
+                   deal.listPrice !== "" && 
+                   deal.salesPrice !== "" && 
+                   !isPayMrrInvalid && 
+                   (metrics.needsApproval ? (deal.justification && deal.salesforceLink && !isSfLinkInvalid) : true);
 
   return (
-    <div ref={appRef} className={cn("min-h-screen bg-zinc-50 text-zinc-900 flex flex-col lg:flex-row", isScreenshotting && "w-[1200px] h-[800px]")}>
+    <div ref={appRef} className={cn("min-h-screen bg-zinc-50 text-zinc-900 flex flex-col lg:flex-row scroll-smooth", isScreenshotting && "w-[1200px]")}>
       {/* Sidebar: Inputs */}
       <aside className={cn(
         "w-full lg:w-[420px] bg-white border-r border-zinc-200 p-8 flex flex-col gap-8 overflow-y-auto shrink-0 shadow-sm",
@@ -387,11 +392,7 @@ export default function App() {
           />
 
           {deal.representative && (
-            <motion.div 
-              initial={{ opacity: 0, y: -10 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="flex items-center gap-2 p-3 bg-zinc-50 rounded-xl border border-zinc-100"
-            >
+            <div className="flex items-center gap-2 p-3 bg-zinc-50 rounded-xl border border-zinc-100 transition-all duration-200">
               <div className="flex items-center gap-1.5 px-2.5 py-1 bg-white border border-zinc-200 rounded-full shadow-sm">
                 <Filter className="w-3 h-3 text-zinc-400" />
                 <span className="text-[10px] font-black uppercase tracking-wider text-zinc-600">{deal.representative.funnel}</span>
@@ -400,7 +401,7 @@ export default function App() {
                 <Globe className="w-3 h-3 text-zinc-400" />
                 <span className="text-[10px] font-black uppercase tracking-wider text-zinc-600">{deal.representative.country}</span>
               </div>
-            </motion.div>
+            </div>
           )}
 
           <div className="space-y-1.5">
@@ -420,6 +421,7 @@ export default function App() {
               <label className="text-xs font-bold text-zinc-500 uppercase tracking-wider">Software MRR (€)</label>
               <input
                 type="number"
+                inputMode="decimal"
                 placeholder="0"
                 className="w-full p-3.5 rounded-xl border border-zinc-200 text-sm focus:ring-4 focus:ring-black/5 focus:border-black outline-none transition-all bg-zinc-50/30"
                 value={deal.softwareMrr}
@@ -436,6 +438,7 @@ export default function App() {
               </div>
               <input
                 type="number"
+                inputMode="decimal"
                 placeholder="120"
                 className={cn(
                   "w-full p-3.5 rounded-xl border text-sm focus:ring-4 outline-none transition-all bg-zinc-50/30",
@@ -454,6 +457,7 @@ export default function App() {
               <label className="text-xs font-bold text-zinc-500 uppercase tracking-wider">List Price (€)</label>
               <input
                 type="number"
+                inputMode="decimal"
                 placeholder="0"
                 className="w-full p-3.5 rounded-xl border border-zinc-200 text-sm focus:ring-4 focus:ring-black/5 focus:border-black outline-none transition-all bg-zinc-50/30"
                 value={deal.listPrice}
@@ -465,6 +469,7 @@ export default function App() {
               <label className="text-xs font-bold text-zinc-500 uppercase tracking-wider">Sales Price (€)</label>
               <input
                 type="number"
+                inputMode="decimal"
                 placeholder="0"
                 className="w-full p-3.5 rounded-xl border border-zinc-200 text-sm focus:ring-4 focus:ring-black/5 focus:border-black outline-none transition-all bg-zinc-50/30"
                 value={deal.salesPrice}
@@ -474,20 +479,15 @@ export default function App() {
             </div>
           </div>
 
-          <AnimatePresence>
+          <div className={cn("transition-all duration-200 overflow-hidden", showPayMrrInfo ? "opacity-100 max-h-40" : "opacity-0 max-h-0")}>
             {showPayMrrInfo && (
-              <motion.div
-                initial={{ opacity: 0, height: 0 }}
-                animate={{ opacity: 1, height: "auto" }}
-                exit={{ opacity: 0, height: 0 }}
-                className="bg-zinc-50 p-4 rounded-xl border border-zinc-100"
-              >
+              <div className="bg-zinc-50 p-4 rounded-xl border border-zinc-100">
                 <p className="text-[10px] text-zinc-500 leading-relaxed font-medium">
                   Estimated minimum Pay MRR per deal is 120 euros. This is a mandatory guardrail for all hardware deals.
                 </p>
-              </motion.div>
+              </div>
             )}
-          </AnimatePresence>
+          </div>
         </div>
 
         <div className="mt-auto pt-8 border-t border-zinc-100">
@@ -500,7 +500,7 @@ export default function App() {
         "flex-1 p-8 lg:p-12 flex flex-col gap-8 overflow-y-auto",
         isScreenshotting && "p-12"
       )}>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-4 md:gap-6">
           <StatCard
             label="Discount %"
             value={`${metrics.discountPercent.toFixed(0)}%`}
@@ -525,33 +525,27 @@ export default function App() {
         </div>
 
         <div className="flex-1 flex flex-col">
-          <AnimatePresence mode="wait">
-            {metrics.needsApproval ? (
-              <motion.div
-                key="approval"
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -20 }}
-                className="bg-white p-10 rounded-[2.5rem] border border-zinc-100 shadow-xl shadow-black/5 flex-1 flex flex-col"
-              >
-                <div className="flex items-start gap-8 mb-10">
-                  <div className="w-16 h-16 rounded-2xl bg-red-500 flex items-center justify-center shrink-0 shadow-lg shadow-red-500/20">
-                    <AlertCircle className="w-8 h-8 text-white" />
-                  </div>
-                  <div>
-                    <div className="flex items-center gap-2 mb-1">
-                      <h3 className="text-2xl font-black text-zinc-900 tracking-tight">Approval Required</h3>
-                      <span className="px-3 py-1 bg-red-500 text-white text-[10px] font-black uppercase tracking-widest rounded-full">
-                        {metrics.requiredApprover} Level
-                      </span>
-                    </div>
-                    <p className="text-zinc-500 text-sm leading-relaxed max-w-xl">
-                      This deal exceeds the 65% hardware discount threshold. A mandatory justification is required for {metrics.requiredApprover} review.
-                    </p>
-                  </div>
+          {metrics.needsApproval ? (
+            <div className="bg-white p-10 rounded-[2.5rem] border border-zinc-100 shadow-xl shadow-black/5 flex-1 flex flex-col transition-all duration-200">
+              <div className="flex items-start gap-8 mb-10">
+                <div className="w-16 h-16 rounded-2xl bg-red-500 flex items-center justify-center shrink-0 shadow-lg shadow-red-500/20">
+                  <AlertCircle className="w-8 h-8 text-white" />
                 </div>
+                <div>
+                  <div className="flex items-center gap-2 mb-1">
+                    <h3 className="text-2xl font-black text-zinc-900 tracking-tight">Approval Required</h3>
+                    <span className="px-3 py-1 bg-red-500 text-white text-[10px] font-black uppercase tracking-widest rounded-full">
+                      {metrics.requiredApprover} Level
+                    </span>
+                  </div>
+                  <p className="text-zinc-500 text-sm leading-relaxed max-w-xl">
+                    This deal exceeds the 65% hardware discount threshold. A mandatory justification is required for {metrics.requiredApprover} review.
+                  </p>
+                </div>
+              </div>
 
-                <div className="flex-1 flex flex-col gap-6">
+              <div className="flex-1 flex flex-col gap-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div className="space-y-2">
                     <label className="text-xs font-bold text-zinc-400 uppercase tracking-widest ml-1">Justification</label>
                     <textarea
@@ -562,73 +556,88 @@ export default function App() {
                       onChange={e => setDeal({...deal, justification: e.target.value})}
                     />
                   </div>
+                  <div className="space-y-4 flex flex-col">
+                    <div className="space-y-2">
+                      <label className="text-xs font-bold text-zinc-400 uppercase tracking-widest ml-1">Salesforce Link</label>
+                      <input
+                        type="text"
+                        className={cn(
+                          "w-full p-6 rounded-3xl border-2 bg-zinc-50 focus:bg-white transition-all text-sm font-medium outline-none",
+                          isSfLinkInvalid ? "border-amber-500 focus:border-amber-500" : "border-zinc-100 focus:border-black"
+                        )}
+                        placeholder="https://..."
+                        value={deal.salesforceLink}
+                        onChange={e => setDeal({...deal, salesforceLink: e.target.value})}
+                      />
+                      {isSfLinkInvalid && <p className="text-[10px] font-bold text-amber-600 uppercase tracking-tight ml-2 flex items-center gap-1"><AlertCircle className="w-3 h-3" /> Link must start with https://</p>}
+                    </div>
+                    <div className="mt-auto p-6 bg-zinc-50 rounded-3xl border border-zinc-100">
+                      <p className="text-[10px] text-zinc-400 font-medium leading-relaxed">
+                        Both Justification and Salesforce Link are mandatory for deals exceeding 65% discount.
+                      </p>
+                    </div>
+                  </div>
+                </div>
 
-                  <button
-                    onClick={handleSubmit}
-                    disabled={isSubmitting || !canSubmit}
-                    className={cn(
-                      "w-full py-5 rounded-3xl font-black text-sm uppercase tracking-[0.2em] flex items-center justify-center gap-3 transition-all shadow-xl",
-                      !canSubmit || isSubmitting
-                        ? "bg-zinc-100 text-zinc-400 cursor-not-allowed"
-                        : "bg-black text-white hover:bg-zinc-800 active:scale-[0.98] shadow-black/10"
-                    )}
-                  >
-                    {isSubmitting ? (
-                      <div className="w-5 h-5 border-2 border-white/20 border-t-white rounded-full animate-spin" />
-                    ) : submitStatus === "success" ? (
-                      <>
-                        <CheckCircle2 className="w-5 h-5" />
-                        Submitted Successfully
-                      </>
-                    ) : (
-                      <>
-                        <Send className="w-5 h-5" />
-                        Submit for {metrics.requiredApprover} Approval
-                      </>
-                    )}
-                  </button>
-                </div>
-              </motion.div>
-            ) : (
-              <motion.div
-                key="auto-approved"
-                initial={{ opacity: 0, scale: 0.98 }}
-                animate={{ opacity: 1, scale: 1 }}
-                exit={{ opacity: 0, scale: 0.98 }}
-                className="bg-white p-12 rounded-[2.5rem] border border-zinc-100 shadow-xl shadow-black/5 flex-1 flex flex-col items-center justify-center text-center"
-              >
-                <div className="w-24 h-24 rounded-[2rem] bg-emerald-500 flex items-center justify-center mb-8 shadow-2xl shadow-emerald-500/20">
-                  <Check className="w-12 h-12 text-white" />
-                </div>
-                <h3 className="text-3xl font-black text-zinc-900 mb-2 tracking-tight">✅ Auto-Approved</h3>
-                <p className="text-zinc-500 max-w-sm mb-10 text-sm leading-relaxed font-medium">
-                  This deal is within policy guardrails. No additional management oversight is required for this configuration.
-                </p>
-                
-                <div className="flex flex-col sm:flex-row gap-4 w-full max-w-md">
-                  {!isScreenshotting && (
+                <button
+                  onClick={handleSubmit}
+                  disabled={isSubmitting || !canSubmit}
+                  className={cn(
+                    "w-full py-5 rounded-3xl font-black text-sm uppercase tracking-[0.2em] flex items-center justify-center gap-3 transition-all shadow-xl",
+                    !canSubmit || isSubmitting
+                      ? "bg-zinc-100 text-zinc-400 cursor-not-allowed"
+                      : "bg-black text-white hover:bg-zinc-800 active:scale-[0.98] shadow-black/10"
+                  )}
+                >
+                  {isSubmitting ? (
+                    <div className="w-5 h-5 border-2 border-white/20 border-t-white rounded-full animate-spin" />
+                  ) : submitStatus === "success" ? (
                     <>
-                      <button
-                        onClick={takeScreenshot}
-                        className="flex-1 py-4 px-8 rounded-2xl bg-zinc-100 text-zinc-900 font-black text-xs uppercase tracking-widest hover:bg-zinc-200 transition-all flex items-center justify-center gap-2 active:scale-95"
-                      >
-                        <Camera className="w-4 h-4" />
-                        Save as Image
-                      </button>
-                      <button
-                        onClick={handleSubmit}
-                        disabled={isSubmitting || !canSubmit}
-                        className="flex-1 py-4 px-8 rounded-2xl bg-black text-white font-black text-xs uppercase tracking-widest hover:bg-zinc-800 transition-all flex items-center justify-center gap-2 active:scale-95 shadow-lg shadow-black/10"
-                      >
-                        <Send className="w-4 h-4" />
-                        Log Deal
-                      </button>
+                      <CheckCircle2 className="w-5 h-5" />
+                      Submitted Successfully
+                    </>
+                  ) : (
+                    <>
+                      <Send className="w-5 h-5" />
+                      Submit for {metrics.requiredApprover} Approval
                     </>
                   )}
-                </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="bg-white p-12 rounded-[2.5rem] border border-zinc-100 shadow-xl shadow-black/5 flex-1 flex flex-col items-center justify-center text-center transition-all duration-200">
+              <div className="w-24 h-24 rounded-[2rem] bg-emerald-500 flex items-center justify-center mb-8 shadow-2xl shadow-emerald-500/20">
+                <Check className="w-12 h-12 text-white" />
+              </div>
+              <h3 className="text-3xl font-black text-zinc-900 mb-2 tracking-tight">✅ Auto-Approved</h3>
+              <p className="text-zinc-500 max-w-sm mb-10 text-sm leading-relaxed font-medium">
+                This deal is within policy guardrails. No additional management oversight is required for this configuration.
+              </p>
+              
+              <div className="flex flex-col sm:flex-row gap-4 w-full max-w-md">
+                {!isScreenshotting && (
+                  <>
+                    <button
+                      onClick={takeScreenshot}
+                      className="flex-1 py-4 px-8 rounded-2xl bg-zinc-100 text-zinc-900 font-black text-xs uppercase tracking-widest hover:bg-zinc-200 transition-all flex items-center justify-center gap-2 active:scale-95"
+                    >
+                      <Camera className="w-4 h-4" />
+                      Save as Image
+                    </button>
+                    <button
+                      onClick={handleSubmit}
+                      disabled={isSubmitting || !canSubmit}
+                      className="flex-1 py-4 px-8 rounded-2xl bg-black text-white font-black text-xs uppercase tracking-widest hover:bg-zinc-800 transition-all flex items-center justify-center gap-2 active:scale-95 shadow-lg shadow-black/10"
+                    >
+                      <Send className="w-4 h-4" />
+                      Log Deal
+                    </button>
+                  </>
+                )}
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Info Footer */}
