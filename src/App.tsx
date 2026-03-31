@@ -302,6 +302,7 @@ export default function App() {
       needsApproval: discountNeedsApproval,
       hardwareCost,
       hwLoss,
+      totalMrr,
       paybackThreshold,
       paybackNeedsDirector,
       requiredApprover
@@ -309,25 +310,32 @@ export default function App() {
   }, [deal]);
 
   const handleSubmit = async () => {
-    if (metrics.needsApproval && !deal.justification) return;
+    if (metrics.needsApproval && (!deal.justification || !deal.salesforceLink)) return;
     if (!deal.representative) return;
 
     setIsSubmitting(true);
     try {
+      // Salesforce link security: auto-prepend https:// if missing
+      let formattedSfLink = deal.salesforceLink.trim();
+      if (formattedSfLink && !formattedSfLink.toLowerCase().startsWith("http://") && !formattedSfLink.toLowerCase().startsWith("https://")) {
+        formattedSfLink = "https://" + formattedSfLink;
+      }
+
       const payload = {
         name: deal.representative.name,
         funnel: deal.representative.funnel,
         country: deal.representative.country,
         accountName: deal.accountName,
-        listPrice: deal.listPrice,
-        salesPrice: deal.salesPrice,
-        softwareMrr: deal.softwareMrr,
-        payMrr: deal.payMrr,
-        discount: metrics.discountPercent.toFixed(1) + "%",
+        listPrice: Number(deal.listPrice || 0).toFixed(2),
+        salesPrice: Number(deal.salesPrice || 0).toFixed(2),
+        softwareMrr: Number(deal.softwareMrr || 0).toFixed(2),
+        payMrr: Number(deal.payMrr || 0).toFixed(2),
+        totalMrr: metrics.totalMrr.toFixed(2),
+        discount: metrics.discountPercent.toFixed(2) + "%",
         payback: metrics.paybackMonths + " months",
-        hwLoss: "€" + metrics.hwLoss.toLocaleString(),
+        hwLoss: "€" + metrics.hwLoss.toFixed(2),
         justification: deal.justification,
-        salesforceLink: deal.salesforceLink,
+        salesforceLink: formattedSfLink,
         requiredApprover: metrics.requiredApprover,
         timestamp: new Date().toISOString()
       };
@@ -351,13 +359,13 @@ export default function App() {
   };
 
   const isPayMrrInvalid = deal.payMrr !== "" && Number(deal.payMrr) < 120;
-  const isSfLinkInvalid = deal.salesforceLink !== "" && !deal.salesforceLink.startsWith("https://");
+  const isSfLinkInvalid = deal.salesforceLink !== "" && !deal.salesforceLink.toLowerCase().startsWith("https://");
   const canSubmit = deal.representative && 
                    deal.accountName && 
                    deal.listPrice !== "" && 
                    deal.salesPrice !== "" && 
                    !isPayMrrInvalid && 
-                   (metrics.needsApproval ? (deal.justification && deal.salesforceLink && !isSfLinkInvalid) : true);
+                   (metrics.needsApproval ? (deal.justification && deal.salesforceLink) : true);
 
   return (
     <div ref={appRef} className={cn("min-h-screen bg-zinc-50 text-zinc-900 flex flex-col lg:flex-row scroll-smooth", isScreenshotting && "w-[1200px]")}>
