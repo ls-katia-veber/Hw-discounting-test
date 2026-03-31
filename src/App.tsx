@@ -16,7 +16,11 @@ import {
   Building2,
   RotateCcw,
   Globe,
-  Filter
+  Filter,
+  FileText,
+  UploadCloud,
+  X,
+  ArrowRight
 } from "lucide-react";
 import { cn } from "./lib/utils";
 
@@ -116,25 +120,109 @@ interface DealData {
   salesPrice: number | "";
   softwareMrr: number | "";
   payMrr: number | "";
+  isPayMrrEnabled: boolean;
   justification: string;
   salesforceLink: string;
+  uploadedFile: string | null;
 }
 
 // --- Components ---
-const StatCard = ({ label, value, subValue, color, icon: Icon }: any) => (
-  <div className="glass p-6 rounded-2xl flex flex-col gap-2 relative overflow-hidden border border-zinc-100 shadow-sm">
-    <div className="flex items-center justify-between mb-2">
-      <span className="text-[10px] font-bold uppercase tracking-widest text-zinc-400">{label}</span>
-      <div className={cn("w-7 h-7 rounded-full flex items-center justify-center", color.replace('bg-', 'bg-').replace('500', '500/10'))}>
-        <Icon className={cn("w-3.5 h-3.5", color.replace('bg-', 'text-'))} />
-      </div>
-    </div>
-    <div className="flex flex-col">
-      <span className="text-2xl font-bold tracking-tight text-zinc-900">{value}</span>
-      <span className={cn("text-[10px] font-semibold mt-0.5", color.replace('bg-', 'text-'))}>{subValue}</span>
-    </div>
+const Toggle = ({ enabled, onChange, label }: { enabled: boolean, onChange: (val: boolean) => void, label: string }) => (
+  <div className="flex items-center justify-between py-2">
+    <span className="text-[11px] font-semibold text-zinc-500 uppercase tracking-wider">{label}</span>
+    <button
+      onClick={() => onChange(!enabled)}
+      className={cn(
+        "relative inline-flex h-5 w-10 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none",
+        enabled ? "bg-black" : "bg-zinc-200"
+      )}
+    >
+      <span
+        className={cn(
+          "pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out",
+          enabled ? "translate-x-5" : "translate-x-0"
+        )}
+      />
+    </button>
   </div>
 );
+
+const StatCard = ({ label, value, subValue, color, icon: Icon, progress, highlightValue, isPaybackCard }: any) => {
+  // Determine colors based on whether it's the payback card or a neutral card
+  let bgColorClass = "bg-white";
+  let borderColorClass = "border-zinc-100/80";
+  let textColorClass = "text-zinc-900";
+  let subTextColorClass = "text-zinc-400";
+  let labelColorClass = "text-zinc-600"; // Darker title for neutral cards
+  let iconBgClass = "bg-zinc-50";
+  let iconColorClass = "text-zinc-400";
+
+  if (isPaybackCard) {
+    const colorParts = color.split('-');
+    const colorName = colorParts[1];
+    
+    if (colorName === 'emerald') {
+      bgColorClass = "bg-emerald-50";
+      borderColorClass = "border-emerald-200";
+      textColorClass = "text-emerald-700";
+      subTextColorClass = "text-emerald-700";
+      iconBgClass = "bg-emerald-100";
+      iconColorClass = "text-emerald-700";
+    } else if (colorName === 'amber') {
+      bgColorClass = "bg-amber-50";
+      borderColorClass = "border-amber-300";
+      textColorClass = "text-amber-700";
+      subTextColorClass = "text-amber-700";
+      iconBgClass = "bg-amber-100";
+      iconColorClass = "text-amber-700";
+    } else if (colorName === 'red') {
+      bgColorClass = "bg-red-50";
+      borderColorClass = "border-red-300";
+      textColorClass = "text-red-700";
+      subTextColorClass = "text-red-700";
+      iconBgClass = "bg-red-100";
+      iconColorClass = "text-red-700";
+    }
+    labelColorClass = textColorClass;
+  }
+
+  return (
+    <div className={cn(
+      "p-6 rounded-3xl flex flex-col relative overflow-hidden border transition-all duration-300 h-full",
+      bgColorClass,
+      borderColorClass,
+      "shadow-[0_2px_10px_rgba(0,0,0,0.02)] hover:shadow-[0_8px_30px_rgba(0,0,0,0.04)]"
+    )}>
+      <div className="flex items-center justify-between mb-4 h-8">
+        <span className={cn("text-[10px] font-bold uppercase tracking-widest", labelColorClass)}>{label}</span>
+        {Icon && (
+          <div className={cn("w-8 h-8 rounded-xl flex items-center justify-center", iconBgClass)}>
+            <Icon className={cn("w-4 h-4", iconColorClass)} />
+          </div>
+        )}
+      </div>
+      <div className="flex flex-col justify-end flex-1">
+        <div className="flex items-baseline">
+          <span className={cn("text-3xl font-black tracking-tight leading-none", textColorClass)}>
+            {value}
+          </span>
+        </div>
+        <span className={cn("text-[10px] font-bold mt-2 uppercase tracking-wide leading-none", subTextColorClass)}>
+          {subValue}
+        </span>
+      </div>
+      {/* Progress bar container - always present to maintain height consistency */}
+      <div className="mt-4 h-1 w-full bg-zinc-100/50 rounded-full overflow-hidden">
+        {progress !== undefined && (
+          <div 
+            className={cn("h-full transition-all duration-500", color)} 
+            style={{ width: `${Math.min(100, (progress / 12) * 100)}%` }}
+          />
+        )}
+      </div>
+    </div>
+  );
+};
 
 const RepSelector = ({ selected, onSelect }: { selected: Representative | null, onSelect: (rep: Representative) => void }) => {
   const [isOpen, setIsOpen] = useState(false);
@@ -225,14 +313,17 @@ export default function App() {
     salesPrice: "",
     softwareMrr: "",
     payMrr: 120,
+    isPayMrrEnabled: true,
     justification: "",
-    salesforceLink: ""
+    salesforceLink: "",
+    uploadedFile: null
   });
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitStatus, setSubmitStatus] = useState<"idle" | "success" | "error">("idle");
   const [showPayMrrInfo, setShowPayMrrInfo] = useState(false);
   const [isScreenshotting, setIsScreenshotting] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
   const appRef = useRef<HTMLDivElement>(null);
 
   const resetCalculator = () => {
@@ -243,9 +334,39 @@ export default function App() {
       salesPrice: "",
       softwareMrr: "",
       payMrr: 120,
+      isPayMrrEnabled: true,
       justification: "",
-      salesforceLink: ""
+      salesforceLink: "",
+      uploadedFile: null
     });
+  };
+
+  // Update Pay MRR when representative changes
+  useEffect(() => {
+    if (deal.representative) {
+      const defaultValue = deal.representative.funnel === "Inbound" ? 120 : 140;
+      setDeal(prev => ({
+        ...prev,
+        payMrr: defaultValue,
+        isPayMrrEnabled: true
+      }));
+    }
+  }, [deal.representative?.name]);
+
+  const handleFileUpload = (file: File) => {
+    if (file.type !== "application/pdf") return;
+    
+    setDeal(prev => ({ ...prev, uploadedFile: file.name }));
+    
+    // Simulate text extraction
+    setTimeout(() => {
+      setDeal(prev => ({
+        ...prev,
+        listPrice: 2500,
+        salesPrice: 1800,
+        softwareMrr: 150
+      }));
+    }, 1000);
   };
 
   const takeScreenshot = async () => {
@@ -276,7 +397,7 @@ export default function App() {
     const listPrice = deal.listPrice === "" ? 0 : Number(deal.listPrice);
     const salesPrice = deal.salesPrice === "" ? 0 : Number(deal.salesPrice);
     const softwareMrr = deal.softwareMrr === "" ? 0 : Number(deal.softwareMrr);
-    const payMrr = deal.payMrr === "" ? 0 : Number(deal.payMrr);
+    const payMrr = !deal.isPayMrrEnabled || deal.payMrr === "" ? 0 : Number(deal.payMrr);
     const totalMrr = softwareMrr + payMrr;
 
     const discountPercent = listPrice > 0 ? ((listPrice - salesPrice) / listPrice) * 100 : 0;
@@ -285,27 +406,40 @@ export default function App() {
     const paybackMonths = Math.ceil(rawPayback);
     const hwLoss = hardwareCost - salesPrice;
 
-    const discountNeedsApproval = discountPercent > 65;
-    
-    // Funnel-based payback threshold
-    const paybackThreshold = deal.representative?.funnel === "Inbound" ? 8 : 12;
-    const paybackNeedsDirector = paybackMonths > paybackThreshold;
+    // New Approval Logic (Payback only)
+    const needsApproval = paybackMonths > 4;
 
     let requiredApprover = "None";
-    if (discountNeedsApproval) {
-      requiredApprover = paybackNeedsDirector ? "Director" : "Manager";
+    let approvalLevel = "Auto-Approved";
+    let statusColor = "bg-emerald-500";
+    let statusLabel = "Auto-Approved";
+
+    if (paybackMonths > 9) {
+      requiredApprover = "Director";
+      approvalLevel = "Director Approval";
+      statusColor = "bg-red-600";
+      statusLabel = "Director Approval Required";
+    } else if (paybackMonths > 4) {
+      requiredApprover = "Manager";
+      approvalLevel = "Manager Approval";
+      statusColor = "bg-amber-500";
+      statusLabel = "Manager Approval Required";
+    } else {
+      statusLabel = "Healthy Deal - Auto-Approved";
+      statusColor = "bg-emerald-600";
     }
 
     return {
       discountPercent,
       paybackMonths,
-      needsApproval: discountNeedsApproval,
+      needsApproval,
       hardwareCost,
       hwLoss,
       totalMrr,
-      paybackThreshold,
-      paybackNeedsDirector,
-      requiredApprover
+      requiredApprover,
+      approvalLevel,
+      statusColor,
+      statusLabel
     };
   }, [deal]);
 
@@ -336,6 +470,7 @@ export default function App() {
         hwLoss: "€" + metrics.hwLoss.toFixed(2),
         justification: deal.justification,
         salesforceLink: formattedSfLink,
+        approvalLevel: metrics.approvalLevel,
         requiredApprover: metrics.requiredApprover,
         timestamp: new Date().toISOString()
       };
@@ -412,6 +547,64 @@ export default function App() {
             </div>
           )}
 
+          <div className="space-y-4">
+            <label className="text-[11px] font-bold text-zinc-400 uppercase tracking-widest">Quote Import</label>
+            <div
+              onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
+              onDragLeave={() => setIsDragging(false)}
+              onDrop={(e) => {
+                e.preventDefault();
+                setIsDragging(false);
+                const file = e.dataTransfer.files[0];
+                if (file) handleFileUpload(file);
+              }}
+              className={cn(
+                "relative group cursor-pointer rounded-2xl border-2 border-dashed transition-all duration-300 p-6 flex flex-col items-center justify-center gap-3",
+                isDragging ? "border-black bg-zinc-50" : "border-zinc-200 hover:border-zinc-300 bg-white",
+                deal.uploadedFile && "border-emerald-500/30 bg-emerald-50/10"
+              )}
+            >
+              <input
+                type="file"
+                accept=".pdf"
+                className="absolute inset-0 opacity-0 cursor-pointer"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (file) handleFileUpload(file);
+                }}
+              />
+              {deal.uploadedFile ? (
+                <>
+                  <div className="w-10 h-10 bg-emerald-500 rounded-full flex items-center justify-center shadow-lg shadow-emerald-500/20">
+                    <Check className="w-5 h-5 text-white" />
+                  </div>
+                  <div className="text-center">
+                    <p className="text-xs font-bold text-zinc-900 truncate max-w-[200px]">{deal.uploadedFile}</p>
+                    <button 
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setDeal(prev => ({ ...prev, uploadedFile: null }));
+                      }}
+                      className="text-[10px] font-bold text-red-500 uppercase tracking-wider mt-1 hover:underline"
+                    >
+                      Remove file
+                    </button>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="w-10 h-10 bg-zinc-100 rounded-full flex items-center justify-center group-hover:scale-110 transition-transform">
+                    <UploadCloud className="w-5 h-5 text-zinc-400" />
+                  </div>
+                  <div className="text-center">
+                    <p className="text-xs font-bold text-zinc-900">Drop Quote PDF</p>
+                    <p className="text-[10px] text-zinc-400 font-medium mt-0.5">or click to browse</p>
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+
           <div className="space-y-1.5">
             <label className="text-xs font-bold text-zinc-500 uppercase tracking-wider">Account Name</label>
             <input
@@ -438,25 +631,38 @@ export default function App() {
               />
             </div>
             <div className="space-y-1.5">
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between mb-1">
                 <label className="text-xs font-bold text-zinc-500 uppercase tracking-wider">Pay MRR (€)</label>
-                <button onClick={() => setShowPayMrrInfo(!showPayMrrInfo)} className="text-zinc-300 hover:text-zinc-500 transition-colors">
-                  <Info className="w-3.5 h-3.5" />
+                <button
+                  onClick={() => setDeal(prev => ({ ...prev, isPayMrrEnabled: !prev.isPayMrrEnabled }))}
+                  className={cn(
+                    "relative inline-flex h-4 w-8 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none",
+                    deal.isPayMrrEnabled ? "bg-black" : "bg-zinc-200"
+                  )}
+                >
+                  <span
+                    className={cn(
+                      "pointer-events-none inline-block h-3 w-3 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out",
+                      deal.isPayMrrEnabled ? "translate-x-4" : "translate-x-0"
+                    )}
+                  />
                 </button>
               </div>
               <input
                 type="number"
                 inputMode="decimal"
+                disabled={!deal.isPayMrrEnabled}
                 placeholder="120"
                 className={cn(
                   "w-full p-3.5 rounded-xl border text-sm focus:ring-4 outline-none transition-all bg-zinc-50/30",
-                  isPayMrrInvalid ? "border-red-500 focus:ring-red-500/10" : "border-zinc-200 focus:ring-black/5 focus:border-black"
+                  !deal.isPayMrrEnabled && "opacity-50 grayscale cursor-not-allowed",
+                  isPayMrrInvalid && deal.isPayMrrEnabled ? "border-red-500 focus:ring-red-500/10" : "border-zinc-200 focus:ring-black/5 focus:border-black"
                 )}
-                value={deal.payMrr}
+                value={deal.isPayMrrEnabled ? deal.payMrr : 0}
                 onFocus={(e) => e.target.select()}
                 onChange={e => setDeal({...deal, payMrr: e.target.value === "" ? "" : Number(e.target.value)})}
               />
-              {isPayMrrInvalid && <p className="text-[9px] font-bold text-red-500 uppercase tracking-tighter ml-1">Min 120€ required</p>}
+              {isPayMrrInvalid && deal.isPayMrrEnabled && <p className="text-[9px] font-bold text-red-500 uppercase tracking-tighter ml-1">Min 120€ required</p>}
             </div>
           </div>
 
@@ -505,30 +711,46 @@ export default function App() {
 
       {/* Main Content: Results */}
       <main className={cn(
-        "flex-1 p-8 lg:p-12 flex flex-col gap-8 overflow-y-auto",
-        isScreenshotting && "p-12"
+        "flex-1 p-8 lg:p-12 flex flex-col gap-8 overflow-y-auto transition-all duration-500",
+        isScreenshotting && "p-12",
+        metrics.needsApproval && `border-l-8 lg:border-l-[12px] ${metrics.statusColor.replace('bg-', 'border-')}`
       )}>
-        <div className="grid grid-cols-2 md:grid-cols-3 gap-4 md:gap-6">
+        {/* Top Alert Banner */}
+        {metrics.needsApproval && (
+          <div className={cn(
+            "w-full p-6 rounded-3xl flex items-center justify-center text-center shadow-lg animate-in fade-in slide-in-from-top-4 duration-500",
+            metrics.requiredApprover === "Director" ? "bg-red-600 text-white" : "bg-amber-500 text-white"
+          )}>
+            <span className="text-xl font-black uppercase tracking-[0.15em]">
+              {metrics.requiredApprover === "Director" ? "Director Approval Required" : "Manager Approval Required"}
+            </span>
+          </div>
+        )}
+
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 md:gap-6 items-stretch">
           <StatCard
             label="Discount %"
             value={`${metrics.discountPercent.toFixed(0)}%`}
-            subValue={metrics.needsApproval ? "Requires Approval" : "Auto-Approved"}
-            color={metrics.needsApproval ? "bg-red-500" : "bg-emerald-500"}
-            icon={Percent}
+            subValue="Hardware Discount"
+            color="bg-zinc-400"
+            icon={null}
           />
           <StatCard
             label="Total HW Loss"
             value={`€${metrics.hwLoss.toLocaleString()}`}
             subValue={metrics.hwLoss > 0 ? "Hardware acquisition cost" : "Hardware profit"}
-            color={metrics.hwLoss > 0 ? "bg-red-500" : "bg-emerald-500"}
-            icon={TrendingDown}
+            color="bg-zinc-400"
+            icon={null}
           />
           <StatCard
             label="CAC Payback"
             value={`${metrics.paybackMonths} mo`}
-            subValue={metrics.paybackMonths <= metrics.paybackThreshold ? "Within Threshold" : "Exceeds Threshold"}
-            color={metrics.paybackMonths <= metrics.paybackThreshold ? "bg-emerald-500" : "bg-red-500"}
+            subValue={metrics.approvalLevel}
+            color={metrics.statusColor}
             icon={TrendingUp}
+            progress={metrics.paybackMonths}
+            highlightValue={true}
+            isPaybackCard={true}
           />
         </div>
 
@@ -536,18 +758,15 @@ export default function App() {
           {metrics.needsApproval ? (
             <div className="bg-white p-10 rounded-[2.5rem] border border-zinc-100 shadow-xl shadow-black/5 flex-1 flex flex-col transition-all duration-200">
               <div className="flex items-start gap-8 mb-10">
-                <div className="w-16 h-16 rounded-2xl bg-red-500 flex items-center justify-center shrink-0 shadow-lg shadow-red-500/20">
+                <div className={cn("w-16 h-16 rounded-2xl flex items-center justify-center shrink-0 shadow-lg", metrics.statusColor.replace('bg-', 'shadow-').replace('500', '500/20'), metrics.statusColor)}>
                   <AlertCircle className="w-8 h-8 text-white" />
                 </div>
                 <div>
                   <div className="flex items-center gap-2 mb-1">
                     <h3 className="text-2xl font-black text-zinc-900 tracking-tight">Approval Required</h3>
-                    <span className="px-3 py-1 bg-red-500 text-white text-[10px] font-black uppercase tracking-widest rounded-full">
-                      {metrics.requiredApprover} Level
-                    </span>
                   </div>
                   <p className="text-zinc-500 text-sm leading-relaxed max-w-xl">
-                    This deal exceeds the 65% hardware discount threshold. A mandatory justification is required for {metrics.requiredApprover} review.
+                    {metrics.statusLabel}. A mandatory justification and Salesforce link are required for review.
                   </p>
                 </div>
               </div>
@@ -581,7 +800,7 @@ export default function App() {
                     </div>
                     <div className="mt-auto p-6 bg-zinc-50 rounded-3xl border border-zinc-100">
                       <p className="text-[10px] text-zinc-400 font-medium leading-relaxed">
-                        Both Justification and Salesforce Link are mandatory for deals exceeding 65% discount.
+                        Both Justification and Salesforce Link are mandatory for deals requiring {metrics.requiredApprover} approval.
                       </p>
                     </div>
                   </div>
@@ -615,33 +834,23 @@ export default function App() {
             </div>
           ) : (
             <div className="bg-white p-12 rounded-[2.5rem] border border-zinc-100 shadow-xl shadow-black/5 flex-1 flex flex-col items-center justify-center text-center transition-all duration-200">
-              <div className="w-24 h-24 rounded-[2rem] bg-emerald-500 flex items-center justify-center mb-8 shadow-2xl shadow-emerald-500/20">
+              <div className={cn("w-24 h-24 rounded-[2rem] flex items-center justify-center mb-8 shadow-2xl", metrics.statusColor.replace('bg-', 'shadow-').replace('500', '500/20').replace('600', '600/20'), metrics.statusColor)}>
                 <Check className="w-12 h-12 text-white" />
               </div>
-              <h3 className="text-3xl font-black text-zinc-900 mb-2 tracking-tight">✅ Auto-Approved</h3>
+              <h3 className="text-3xl font-black text-zinc-900 mb-2 tracking-tight">{metrics.statusLabel}</h3>
               <p className="text-zinc-500 max-w-sm mb-10 text-sm leading-relaxed font-medium">
                 This deal is within policy guardrails. No additional management oversight is required for this configuration.
               </p>
               
-              <div className="flex flex-col sm:flex-row gap-4 w-full max-w-md">
+              <div className="flex flex-col sm:flex-row gap-4 w-full max-w-xs">
                 {!isScreenshotting && (
-                  <>
-                    <button
-                      onClick={takeScreenshot}
-                      className="flex-1 py-4 px-8 rounded-2xl bg-zinc-100 text-zinc-900 font-black text-xs uppercase tracking-widest hover:bg-zinc-200 transition-all flex items-center justify-center gap-2 active:scale-95"
-                    >
-                      <Camera className="w-4 h-4" />
-                      Save as Image
-                    </button>
-                    <button
-                      onClick={handleSubmit}
-                      disabled={isSubmitting || !canSubmit}
-                      className="flex-1 py-4 px-8 rounded-2xl bg-black text-white font-black text-xs uppercase tracking-widest hover:bg-zinc-800 transition-all flex items-center justify-center gap-2 active:scale-95 shadow-lg shadow-black/10"
-                    >
-                      <Send className="w-4 h-4" />
-                      Log Deal
-                    </button>
-                  </>
+                  <button
+                    onClick={takeScreenshot}
+                    className="w-full py-4 px-8 rounded-2xl bg-zinc-100 text-zinc-900 font-black text-xs uppercase tracking-widest hover:bg-zinc-200 transition-all flex items-center justify-center gap-2 active:scale-95"
+                  >
+                    <Camera className="w-4 h-4" />
+                    Take Screenshot
+                  </button>
                 )}
               </div>
             </div>
@@ -662,8 +871,8 @@ export default function App() {
             </div>
             <div className="w-px h-6 bg-zinc-200" />
             <div className="flex flex-col">
-              <span className="text-[9px] font-bold text-zinc-400 uppercase tracking-widest">Threshold</span>
-              <span className="text-xs font-black text-zinc-900">{metrics.paybackThreshold} months</span>
+              <span className="text-[9px] font-bold text-zinc-400 uppercase tracking-widest">Status</span>
+              <span className={cn("text-xs font-black", metrics.statusColor.replace('bg-', 'text-'))}>{metrics.statusLabel}</span>
             </div>
           </div>
           {!isScreenshotting && (
