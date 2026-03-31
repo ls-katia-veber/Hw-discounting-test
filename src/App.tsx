@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useRef } from "react";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion, AnimatePresence } from "motion/react";
 import { toPng } from "html-to-image";
 import {
   TrendingDown,
@@ -9,31 +9,40 @@ import {
   Check,
   Info,
   AlertCircle,
-  Camera
+  Camera,
+  Percent
 } from "lucide-react";
 import { cn } from "./lib/utils";
 
 // --- Types ---
 interface DealData {
   accountName: string;
-  listPrice: number;
-  salesPrice: number;
-  softwareMrr: number;
-  payMrr: number;
+  listPrice: number | "";
+  salesPrice: number | "";
+  softwareMrr: number | "";
+  payMrr: number | "";
   justification: string;
 }
 
 // --- Components ---
-const StatCard = ({ label, value, subValue, color, icon: Icon }: any) => (
+const StatCard = ({ label, value, subValue, color, icon: Icon, badge }: any) => (
   <div className="glass p-8 rounded-2xl flex flex-col gap-2 relative overflow-hidden">
     <div className="flex items-center justify-between mb-4">
-      <span className="text-xs font-bold uppercase tracking-wider text-zinc-400">{label}</span>
+      <div className="flex flex-col gap-1">
+        <span className="text-xs font-bold uppercase tracking-wider text-zinc-400">{label}</span>
+        {badge && (
+          <div className="flex items-center gap-1 text-[10px] font-bold text-red-500 uppercase tracking-tighter bg-red-500/10 px-2 py-0.5 rounded-full w-fit">
+            <AlertCircle className="w-2.5 h-2.5" />
+            {badge}
+          </div>
+        )}
+      </div>
       <div className={cn("w-8 h-8 rounded-full flex items-center justify-center", color.replace('bg-', 'bg-').replace('500', '500/10'))}>
         <Icon className={cn("w-4 h-4", color.replace('bg-', 'text-'))} />
       </div>
     </div>
     <div className="flex flex-col">
-      <span className="text-3xl font-bold tracking-tight">{value}</span>
+      <span className={cn("text-3xl font-bold tracking-tight", badge && "text-red-500")}>{value}</span>
       <span className={cn("text-xs font-medium mt-1", color.replace('bg-', 'text-'))}>{subValue}</span>
     </div>
   </div>
@@ -42,9 +51,9 @@ const StatCard = ({ label, value, subValue, color, icon: Icon }: any) => (
 export default function App() {
   const [deal, setDeal] = useState<DealData>({
     accountName: "",
-    listPrice: 0,
-    salesPrice: 0,
-    softwareMrr: 0,
+    listPrice: "",
+    salesPrice: "",
+    softwareMrr: "",
     payMrr: 120,
     justification: ""
   });
@@ -87,9 +96,11 @@ export default function App() {
 
   // --- Logic ---
   const metrics = useMemo(() => {
-    const listPrice = deal.listPrice || 0;
-    const salesPrice = deal.salesPrice || 0;
-    const totalMrr = (deal.softwareMrr || 0) + (deal.payMrr || 0);
+    const listPrice = deal.listPrice === "" ? 0 : Number(deal.listPrice);
+    const salesPrice = deal.salesPrice === "" ? 0 : Number(deal.salesPrice);
+    const softwareMrr = deal.softwareMrr === "" ? 0 : Number(deal.softwareMrr);
+    const payMrr = deal.payMrr === "" ? 0 : Number(deal.payMrr);
+    const totalMrr = softwareMrr + payMrr;
 
     // Discount % = (List - Sales) / List
     const discountPercent = listPrice > 0 ? ((listPrice - salesPrice) / listPrice) * 100 : 0;
@@ -144,6 +155,8 @@ export default function App() {
     }
   };
 
+  const isPayMrrInvalid = deal.payMrr !== "" && Number(deal.payMrr) < 120;
+
   return (
     <div ref={appRef} className={cn("min-h-screen bg-white text-zinc-900", isScreenshotting && "w-[1200px]")}>
       {/* Main Content */}
@@ -175,6 +188,7 @@ export default function App() {
                     placeholder="e.g. Acme Corp"
                     className="w-full"
                     value={deal.accountName}
+                    onFocus={(e) => e.target.select()}
                     onChange={e => setDeal({...deal, accountName: e.target.value})}
                   />
                 </div>
@@ -186,7 +200,8 @@ export default function App() {
                       type="number"
                       className="w-full"
                       value={deal.softwareMrr}
-                      onChange={e => setDeal({...deal, softwareMrr: Number(e.target.value)})}
+                      onFocus={(e) => e.target.select()}
+                      onChange={e => setDeal({...deal, softwareMrr: e.target.value === "" ? "" : Number(e.target.value)})}
                     />
                   </div>
                   <div>
@@ -211,14 +226,14 @@ export default function App() {
                     )}
                     <input
                       type="number"
-                      className="w-full"
+                      className={cn("w-full", isPayMrrInvalid && "border-red-500 focus:ring-red-500")}
                       value={deal.payMrr}
-                      onChange={e => {
-                        const val = Number(e.target.value);
-                        // Block any input lower than 120
-                        setDeal({...deal, payMrr: val < 120 ? 120 : val});
-                      }}
+                      onFocus={(e) => e.target.select()}
+                      onChange={e => setDeal({...deal, payMrr: e.target.value === "" ? "" : Number(e.target.value)})}
                     />
+                    {isPayMrrInvalid && (
+                      <div className="text-[10px] text-red-500 mt-1 font-bold">Min 120€ required</div>
+                    )}
                   </div>
                 </div>
 
@@ -247,7 +262,8 @@ export default function App() {
                       type="number"
                       className="w-full"
                       value={deal.listPrice}
-                      onChange={e => setDeal({...deal, listPrice: Number(e.target.value)})}
+                      onFocus={(e) => e.target.select()}
+                      onChange={e => setDeal({...deal, listPrice: e.target.value === "" ? "" : Number(e.target.value)})}
                     />
                   </div>
                   <div>
@@ -274,7 +290,8 @@ export default function App() {
                       type="number"
                       className="w-full"
                       value={deal.salesPrice}
-                      onChange={e => setDeal({...deal, salesPrice: Number(e.target.value)})}
+                      onFocus={(e) => e.target.select()}
+                      onChange={e => setDeal({...deal, salesPrice: e.target.value === "" ? "" : Number(e.target.value)})}
                     />
                   </div>
                 </div>
@@ -289,8 +306,16 @@ export default function App() {
           )}>
             <div className={cn(
               "grid gap-6",
-              isScreenshotting ? "grid-cols-2" : "grid-cols-1 md:grid-cols-2"
+              isScreenshotting ? "grid-cols-3" : "grid-cols-1 md:grid-cols-3"
             )}>
+              <StatCard
+                label="Discount %"
+                value={`${metrics.discountPercent.toFixed(0)}%`}
+                subValue={metrics.needsApproval ? "Requires Approval" : "Auto-Approved"}
+                color={metrics.needsApproval ? "bg-red-500" : "bg-emerald-500"}
+                icon={Percent}
+                badge={metrics.needsApproval ? "Manager Approval Required" : null}
+              />
               <StatCard
                 label="Total HW Loss"
                 value={`€${metrics.hwLoss.toLocaleString()}`}
